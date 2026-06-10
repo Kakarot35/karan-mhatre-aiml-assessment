@@ -26,7 +26,7 @@ LEADS_CSV = "data/leads.csv"
 INTERACTIONS_CSV = "data/interactions.csv"
 
 # Trained model artifact location.
-MODEL_PATH = "model.pkl"
+MODEL_PATH = "outputs/model.pkl"
 
 # Output artifacts produced during training and evaluation.
 METRICS_PATH = "outputs/model_metrics.json"
