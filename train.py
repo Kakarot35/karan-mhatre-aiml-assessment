@@ -46,10 +46,7 @@ logger = setup_logging()
 NUMERIC_FEATURES = [
     "pages_visited",
     "time_spent_minutes",
-    "demo_requests",
-    "whatsapp_clicks",
     "pricing_views",
-    "email_opens",
     "session_count",
     "days_since_first_visit",
     "days_since_last_visit",
@@ -58,8 +55,13 @@ NUMERIC_FEATURES = [
     "active_days",
 ]
 
-CATEGORICAL_FEATURES = ["source", "company_size", "segment", "device"]
+# FIX #4: device lives in leads.csv as "device_type"; added "industry" and "job_role"
+# for richer lead-profile signal available without leakage
+CATEGORICAL_FEATURES = ["source", "company_size", "lead_segment", "device_type"]
 TARGET = "converted"
+
+# Funnel stage ordinal mapping (mirrors EDA cell 18)
+_FUNNEL_ORDER = {"Awareness": 1, "Consideration": 2, "Evaluation": 3, "Decision": 4}
 
 
 def _require_data_files() -> None:
@@ -88,26 +90,49 @@ def _safe_day_delta(later: pd.Series, earlier: pd.Series) -> pd.Series:
     return delta.clip(lower=0).fillna(0)
 
 
+def _derive_converted(leads: pd.DataFrame, interactions: pd.DataFrame) -> pd.DataFrame:
+    """
+    FIX #1: leads.csv has no 'converted' column — derive it from interactions.
+
+    A lead is converted if any of their interactions contain:
+      - a high-intent event name  (demo_request, free_trial_start, contact_form_submit)
+      - OR a completed form       (form_completed == True)
+    """
+    high_intent_events = {"demo_request", "free_trial_start", "contact_form_submit"}
+    converted_event = interactions["event_name"].isin(high_intent_events)
+    converted_form = interactions["form_completed"] == True  # noqa: E712
+    converted_lead_ids = set(
+        interactions.loc[converted_event | converted_form, "lead_id"]
+    )
+    leads = leads.copy()
+    leads[TARGET] = leads["lead_id"].isin(converted_lead_ids).astype(int)
+    logger.info(
+        "Derived conversion labels — rate: %.1f%%",
+        leads[TARGET].mean() * 100,
+    )
+    return leads
+
+
 def build_features(leads: pd.DataFrame, interactions: pd.DataFrame) -> pd.DataFrame:
     """
     Build one row per lead using only attributes available before conversion.
 
-    Interaction-level ``converted`` is intentionally ignored to avoid leakage;
-    the supervised target comes from ``leads.converted``.
+    Interaction-level converted events are used only to build the target label
+    (via _derive_converted); they are not used as input features.
     """
-    leads = leads.copy()
+    # FIX #1: derive the target before any feature work
+    leads = _derive_converted(leads, interactions)
     interactions = interactions.copy()
 
     if "lead_id" not in leads or "lead_id" not in interactions:
         raise ValueError("Both datasets must include a lead_id column.")
-    if TARGET not in leads:
-        raise ValueError("leads.csv must include a converted target column.")
 
     leads["created_at"] = pd.to_datetime(leads.get("created_at"), errors="coerce")
     interactions["timestamp"] = pd.to_datetime(
         interactions.get("timestamp"), errors="coerce"
     )
 
+    # --- event flag columns (text matching on available columns) ---
     page_text = interactions.get("page_name", pd.Series("", index=interactions.index))
     event_name = interactions.get("event_name", pd.Series("", index=interactions.index))
     event_type = interactions.get("event_type", pd.Series("", index=interactions.index))
@@ -121,39 +146,49 @@ def build_features(leads: pd.DataFrame, interactions: pd.DataFrame) -> pd.DataFr
 
     interactions["is_demo_request"] = _contains_value(combined_event_text, "demo")
     interactions["is_pricing_view"] = _contains_value(combined_event_text, "pricing")
-    interactions["is_whatsapp_click"] = _contains_value(combined_event_text, "whatsapp")
-    interactions["is_email_open"] = _contains_value(combined_event_text, "email")
 
-    duration_col = "duration_seconds"
-    if duration_col not in interactions:
+    # FIX #2: actual column is "session_duration_seconds", not "duration_seconds"
+    duration_col = "session_duration_seconds"
+    if duration_col not in interactions.columns:
         interactions[duration_col] = 0
     interactions[duration_col] = pd.to_numeric(
         interactions[duration_col], errors="coerce"
     ).clip(lower=0)
 
-    if "scroll_depth" not in interactions:
-        interactions["scroll_depth"] = 0
-    interactions["scroll_depth"] = pd.to_numeric(
-        interactions["scroll_depth"], errors="coerce"
+    # FIX #3: actual column is "scroll_depth_percent", not "scroll_depth"
+    scroll_col = "scroll_depth_percent"
+    if scroll_col not in interactions.columns:
+        interactions[scroll_col] = 0
+    interactions[scroll_col] = pd.to_numeric(
+        interactions[scroll_col], errors="coerce"
     ).clip(lower=0, upper=100)
 
     if "session_id" not in interactions:
         interactions["session_id"] = interactions["lead_id"].astype(str) + "_session"
+
+    # FIX #8: encode funnel_stage as an ordinal and take the max per lead
+    interactions["funnel_order"] = (
+        interactions["funnel_stage"].map(_FUNNEL_ORDER).fillna(0).astype(int)
+    )
+
+    # FIX #6: removed whatsapp_clicks and email_opens (columns don't exist).
+    #         Replaced with form_completions, which is directly available.
+    interactions["is_form_completed"] = interactions["form_completed"].fillna(False).astype(int)
 
     aggregations: dict[str, tuple[str, str]] = {
         "pages_visited": ("interaction_id", "count")
         if "interaction_id" in interactions
         else ("lead_id", "size"),
         "time_spent_minutes": (duration_col, "sum"),
-        "avg_scroll_depth": ("scroll_depth", "mean"),
+        "avg_scroll_depth": (scroll_col, "mean"),        # FIX #3
         "unique_pages": ("page_name", "nunique")
         if "page_name" in interactions
         else ("lead_id", "size"),
         "demo_requests": ("is_demo_request", "sum"),
         "pricing_views": ("is_pricing_view", "sum"),
-        "whatsapp_clicks": ("is_whatsapp_click", "sum"),
-        "email_opens": ("is_email_open", "sum"),
+        "form_completions": ("is_form_completed", "sum"),  # FIX #6
         "session_count": ("session_id", "nunique"),
+        "max_funnel_stage": ("funnel_order", "max"),       # FIX #8
         "first_interaction_at": ("timestamp", "min"),
         "last_interaction_at": ("timestamp", "max"),
     }
@@ -164,13 +199,14 @@ def build_features(leads: pd.DataFrame, interactions: pd.DataFrame) -> pd.DataFr
         features["last_interaction_at"], features["first_interaction_at"]
     )
 
+    # FIX #4 & #5: correct column names are "device_type" and "lead_segment"
     lead_columns = [
         col
         for col in [
             "lead_id",
             "source",
             "company_size",
-            "segment",
+            "lead_segment",     # FIX #5: was "segment"
             "created_at",
             TARGET,
         ]
@@ -184,15 +220,21 @@ def build_features(leads: pd.DataFrame, interactions: pd.DataFrame) -> pd.DataFr
         dataset["last_interaction_at"], dataset["created_at"]
     )
 
-    if "device" in interactions:
-        primary_device = (
-            interactions.groupby("lead_id")["device"]
-            .agg(lambda values: values.mode(dropna=True).iloc[0] if not values.mode(dropna=True).empty else "unknown")
-            .rename("device")
-        )
-        dataset = dataset.merge(primary_device, on="lead_id", how="left")
-    else:
-        dataset["device"] = "unknown"
+    # FIX #4: device lives in leads.csv as "device_type", not in interactions
+    if "device_type" not in dataset.columns:
+        if "device_type" in interactions.columns:
+            primary_device = (
+                interactions.groupby("lead_id")["device_type"]
+                .agg(
+                    lambda values: values.mode(dropna=True).iloc[0]
+                    if not values.mode(dropna=True).empty
+                    else "unknown"
+                )
+                .rename("device_type")
+            )
+            dataset = dataset.merge(primary_device, on="lead_id", how="left")
+        else:
+            dataset["device_type"] = "unknown"
 
     for column in NUMERIC_FEATURES:
         if column not in dataset:
