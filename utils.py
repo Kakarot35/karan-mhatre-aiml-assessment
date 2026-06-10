@@ -21,9 +21,7 @@ from sklearn.preprocessing import LabelEncoder
 import config
 
 
-# ------------------------------------------------------------------
 # Logging
-# ------------------------------------------------------------------
 def setup_logging(log_level: str = config.LOG_LEVEL) -> logging.Logger:
     """
     Configure application-wide logging and return a project logger.
@@ -52,9 +50,7 @@ def setup_logging(log_level: str = config.LOG_LEVEL) -> logging.Logger:
 logger = setup_logging()
 
 
-# ------------------------------------------------------------------
 # Data loading
-# ------------------------------------------------------------------
 def load_data(
     leads_path: str = config.LEADS_CSV,
     interactions_path: str = config.INTERACTIONS_CSV,
@@ -108,9 +104,9 @@ def load_data(
     return leads_df, interactions_df
 
 
-# ------------------------------------------------------------------
+
 # Missing value handling
-# ------------------------------------------------------------------
+
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     """
     Impute missing values in a DataFrame.
@@ -161,9 +157,9 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     return cleaned_df
 
 
-# ------------------------------------------------------------------
+
 # Categorical encoding
-# ------------------------------------------------------------------
+
 def encode_categoricals(
     df: pd.DataFrame,
     categorical_cols: list[str] = config.CATEGORICAL_FEATURES,
@@ -205,9 +201,9 @@ def encode_categoricals(
     return encoded_df, encoders
 
 
-# ------------------------------------------------------------------
+
 # Confidence and risk classification
-# ------------------------------------------------------------------
+
 def get_confidence_level(probability: float) -> str:
     """
     Map a conversion probability to a confidence bucket.
@@ -254,9 +250,9 @@ def get_risk_level(probability: float) -> str:
     return "high"
 
 
-# ------------------------------------------------------------------
+
 # JSON I/O
-# ------------------------------------------------------------------
+
 def save_json(data: dict[str, Any], path: str) -> None:
     """
     Persist a dictionary as a JSON file, creating parent directories as needed.
@@ -279,9 +275,9 @@ def save_json(data: dict[str, Any], path: str) -> None:
         raise
 
 
-# ------------------------------------------------------------------
+
 # Model deserialization
-# ------------------------------------------------------------------
+
 def load_model(model_path: str = config.MODEL_PATH) -> Any:
     """
     Load a pickled model from disk.
