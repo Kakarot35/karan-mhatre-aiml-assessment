@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 _PROJECT_ROOT = Path(__file__).resolve().parent
 load_dotenv(_PROJECT_ROOT / ".env")
 
-# ------------------------------------------------------------------
+
 # Paths
-# ------------------------------------------------------------------
+
 # Base directory for raw and processed lead data.
 DATA_DIR = "data/"
 
@@ -32,9 +32,9 @@ MODEL_PATH = "model.pkl"
 METRICS_PATH = "outputs/model_metrics.json"
 FEATURE_IMPORTANCE_PATH = "outputs/feature_importance.png"
 
-# ------------------------------------------------------------------
+
 # Model settings
-# ------------------------------------------------------------------
+
 # Fraction of the dataset reserved for evaluation.
 TEST_SIZE = 0.2
 
@@ -44,9 +44,8 @@ RANDOM_STATE = 42
 # Number of folds used in cross-validation.
 CV_FOLDS = 5
 
-# ------------------------------------------------------------------
+
 # Feature lists
-# ------------------------------------------------------------------
 # Categorical columns that require encoding (one-hot or ordinal).
 CATEGORICAL_FEATURES = [
     "source",
@@ -72,9 +71,8 @@ NUMERICAL_FEATURES = [
 # Target column for the supervised learning task.
 TARGET_COLUMN = "converted"
 
-# ------------------------------------------------------------------
 # API settings
-# ------------------------------------------------------------------
+# 
 # FastAPI metadata exposed through the OpenAPI schema.
 API_TITLE = "Lead Conversion Prediction API"
 API_VERSION = "1.0.0"
@@ -83,16 +81,13 @@ API_VERSION = "1.0.0"
 CONFIDENCE_HIGH = 0.7
 CONFIDENCE_LOW = 0.4
 
-# ------------------------------------------------------------------
 # Logging
-# ------------------------------------------------------------------
 # Standard structured log format with timestamp, logger, level, and message.
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 LOG_LEVEL = "INFO"
 
-# ------------------------------------------------------------------
 # External services
-# ------------------------------------------------------------------
+
 # Gemini API key loaded from the environment (e.g. via .env).
 # Falls back to None if not set so the rest of the system can
 # fail gracefully on startup rather than at first use.
