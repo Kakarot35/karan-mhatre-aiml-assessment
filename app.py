@@ -29,13 +29,10 @@ class PredictionInput(BaseModel):
     lead_id: str | None = Field(default=None, examples=["L00123"])
     pages_visited: int = Field(ge=0, examples=[14])
     time_spent_minutes: float = Field(ge=0, examples=[45])
-    demo_requests: int = Field(ge=0, examples=[1])
-    whatsapp_clicks: int = Field(ge=0, examples=[2])
     pricing_views: int = Field(ge=0, examples=[3])
-    email_opens: int = Field(ge=0, examples=[5])
     session_count: int = Field(ge=0, examples=[4])
     days_since_first_visit: int = Field(ge=0, examples=[12])
-    source: str = Field(min_length=1, examples=["Google"])
+    first_touch_channel: str = Field(min_length=1, examples=["Google"])
     company_size: str = Field(min_length=1, examples=["Medium"])
 
 
@@ -87,20 +84,17 @@ def _as_model_frame(payload: PredictionInput, artifact: dict[str, Any]) -> pd.Da
     row: dict[str, Any] = {
         "pages_visited": payload.pages_visited,
         "time_spent_minutes": payload.time_spent_minutes,
-        "demo_requests": payload.demo_requests,
-        "whatsapp_clicks": payload.whatsapp_clicks,
         "pricing_views": payload.pricing_views,
-        "email_opens": payload.email_opens,
         "session_count": payload.session_count,
         "days_since_first_visit": payload.days_since_first_visit,
         "days_since_last_visit": payload.days_since_first_visit,
         "avg_scroll_depth": 0,
         "unique_pages": payload.pages_visited,
         "active_days": payload.days_since_first_visit,
-        "source": payload.source,
+        "first_touch_channel": payload.first_touch_channel,
         "company_size": payload.company_size,
-        "segment": "unknown",
-        "device": "unknown",
+        "lead_segment": "unknown",
+        "device_type": "unknown",
     }
 
     columns = artifact.get("numeric_features", []) + artifact.get("categorical_features", [])
